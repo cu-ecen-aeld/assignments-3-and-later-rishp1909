@@ -1,4 +1,10 @@
+#include <stdlib.h>
 #include "systemcalls.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <string.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,8 +22,10 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int rc = system(cmd);
+    
+    return (rc != -1 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0);
 
-    return true;
 }
 
 /**
@@ -40,16 +48,22 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    int rc;
+    
+    if(count < 3)
+       return false;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        //printf("Argument %d: %s\n",i , command[i]);
     }
+   
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
-/*
+/* 
  * TODO:
  *   Execute a system command by calling fork, execv(),
  *   and wait instead of system (see LSP page 161).
@@ -59,9 +73,31 @@ bool do_exec(int count, ...)
  *
 */
 
-    va_end(args);
+    pid_t pid = fork();
 
-    return true;
+   if (pid == -1)
+   {
+      perror("fork");
+      return false;
+   } 
+   if (pid > 0)
+   {      
+      if (waitpid(pid, &rc, 0) == -1) {
+            return false;  // Waiting failed
+      }
+
+      return WIFEXITED(rc) && WEXITSTATUS(rc) == 0;
+   }
+   else 
+   {
+      // we are the child
+      execv(command[0],command);
+      _exit(EXIT_FAILURE);   // exec never returns
+   }
+
+    waitpid(pid, &rc, 0);
+    va_end(args);
+    return WIFEXITED(rc) && WEXITSTATUS(rc) == 0;
 }
 
 /**
@@ -75,6 +111,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    int rc;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
@@ -92,8 +129,23 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int kidpid;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    if (fd < 0) { perror("open"); abort(); }
+       switch (kidpid = fork()) {
+         case -1: perror("fork"); abort();
+         case 0:
+             if (dup2(fd, 1) < 0) { perror("dup2"); abort(); }
+             close(fd);
+             execvp(command[0], command); perror("execvp"); abort();
+        default:
+        close(fd);
+       /* do whatever the parent wants to do. */
+      }
 
+
+
+    waitpid(kidpid, &rc, 0);
     va_end(args);
-
-    return true;
+    return WIFEXITED(rc) && WEXITSTATUS(rc) == 0;
 }
