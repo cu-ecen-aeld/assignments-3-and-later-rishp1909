@@ -124,10 +124,11 @@ void startProcess()
     mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
     char *filename = "/var/tmp/aesdsocketdata";
     
+    syslog(LOG_USER,"In startPRocess");
     ///var/tmp/aesdsocketdata
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode);
     close(fd);
-    
+    syslog(LOG_USER,"/var/tmp/aesdsocketdata created");
     // socket create and verification 
     sockfd = socket(AF_INET, SOCK_STREAM, 0); 
     if (sockfd == -1) { 
@@ -255,7 +256,7 @@ static void startdaemon()
     }
 
     /* Open the log file */
-    openlog ("aesdsocket", LOG_PID, LOG_DAEMON);
+    openlog ("aesdsocket", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 }
 
 
@@ -263,12 +264,14 @@ int main(int argc, char **argv)
 { 
     if(argc >= 2 )
     {
+       #if 0
        char command[5] = {0};
        int  csize = strlen(argv[1]);
        strcpy(command,argv[1]);
    
        if(strcmp(command,"-d") == 0)
-          startdaemon();
+       #endif
+       startdaemon();
     }
     else
     {
@@ -283,6 +286,7 @@ int main(int argc, char **argv)
         }
         openlog ("aeldsocket", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
     }
+    syslog(LOG_USER,"Main thread started");
     startProcess();
 } 
 
