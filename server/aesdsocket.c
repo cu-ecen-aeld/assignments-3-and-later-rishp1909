@@ -266,8 +266,7 @@ int main(int argc, char **argv)
        char command[5] = {0};
        int  csize = strlen(argv[1]);
        strcpy(command,argv[1]);
-       printf("Command %s and size %d",command,csize);
-    
+   
        if(strcmp(command,"-d") == 0)
           startdaemon();
     }
