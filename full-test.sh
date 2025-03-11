@@ -39,6 +39,7 @@ if [ -f conf/assignment.txt ]; then
             echo "Test of assignment ${assignment} complete with success"
         else
             echo "Test of assignment ${assignment} failed with rc=${rc}"
+            cat /var/log/syslog | grep "aesd"
             exit $rc
         fi
     else
