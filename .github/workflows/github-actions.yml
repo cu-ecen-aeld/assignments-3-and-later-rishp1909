@@ -19,9 +19,6 @@ jobs:
         container: cuaesd/aesd-autotest:24-assignment5
         runs-on: self-hosted
         steps:
-          - uses: docker/setup-qemu-action@v2
-            with:
-                  platforms: arm64
           - uses: actions/checkout@v2
           - name: Checkout submodules
             run : git submodule update --init --recursive
