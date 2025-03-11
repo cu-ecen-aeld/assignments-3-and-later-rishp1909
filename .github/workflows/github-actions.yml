@@ -19,7 +19,7 @@ jobs:
         container: cuaesd/aesd-autotest:24-assignment5
         runs-on: self-hosted
         steps:
-          - uses: docker/setup-qemu-action@v1
+          - uses: docker/setup-qemu-action@v2
             with:
                   platforms: linux/amd64
           - uses: actions/checkout@v2
