@@ -21,7 +21,7 @@ jobs:
         steps:
           - uses: docker/setup-qemu-action@v1
             with:
-                  platforms: amd64
+                  platforms: linux/amd64
           - uses: actions/checkout@v2
           - name: Checkout submodules
             run : git submodule update --init --recursive
