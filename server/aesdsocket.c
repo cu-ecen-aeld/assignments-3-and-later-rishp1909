@@ -125,6 +125,15 @@ void startProcess()
     char *filename = "/var/tmp/aesdsocketdata";
     
     syslog(LOG_USER,"In startPRocess");
+    
+    if (signal(SIGTERM, signal_handler) == SIG_ERR) {
+        perror("signal");
+        exit(1);
+    }
+    if (signal(SIGINT, signal_handler) == SIG_ERR) {
+        perror("signal");
+        exit(1);
+    }
     ///var/tmp/aesdsocketdata
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode);
     close(fd);
@@ -222,14 +231,7 @@ static void startdaemon()
     if (setsid() < 0)
         exit(EXIT_FAILURE);
 
-    if (signal(SIGTERM, signal_handler) == SIG_ERR) {
-        perror("signal");
-        exit(1);
-    }
-    if (signal(SIGINT, signal_handler) == SIG_ERR) {
-        perror("signal");
-        exit(1);
-    }
+
     /* Fork off for the second time*/
     pid = fork();
 

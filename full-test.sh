@@ -49,7 +49,4 @@ else
     echo "Missing conf/assignment.txt, no assignment to run"
     exit 1
 fi
-
-cat /var/log/syslog | grep "aesd"
-
 exit ${unit_test_rc}
