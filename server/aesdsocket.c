@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <errno.h>
 #define MAX 20*1024
 #define PORT 9000 
 #define SA struct sockaddr 
@@ -211,7 +212,7 @@ void startProcess()
 }
 
 
-
+#if 0
 static void startdaemon()
 {
     pid_t pid;
@@ -260,7 +261,49 @@ static void startdaemon()
     /* Open the log file */
     openlog ("aesdsocket", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 }
-
+#else
+ void daemonize( char *cmd ){
+          pid_t pid;
+ 
+         /* Clear file creation mask */
+         umask( 0 );
+ 
+        /* Spawn a new process and exit */
+        if( (pid = fork()) < 0 ){ /* Fork error */
+                 fprintf( stderr, "%s: Fork error\n", cmd );
+                 exit( errno );
+         }
+         else if( pid > 0 ){ /* Parent process */
+                 exit( 0 );
+         }
+         /* Child process */
+         setsid();
+ 
+         /* Change working directory to root directory */
+         if( chdir( "/" ) < 0 ){
+                 fprintf( stderr, "%s: Error changing directory\n", cmd );
+                 exit( errno );
+         }
+ 
+         /* Close all open file descriptors */
+         for( int i = 0; i < 1024; i++ ){
+                 close( i );
+         }
+ 
+         /* Reassociate file descriptors 0, 1, and 2 with /dev/null */
+         int fd0 = open( "/dev/null", O_RDWR );
+         int fd1 = dup( 0 );
+         int fd2 = dup( 0 );
+ 
+         /* Open the log file */
+         openlog( cmd, LOG_CONS, LOG_DAEMON );
+         if( fd0 != 0 || fd1 != 1 || fd2 != 2 ){
+                 syslog( LOG_ERR, "Unexpected file descriptors %d, %d, %d\n",
+                         fd0, fd1, fd2 );
+                 exit( errno );
+         }
+ }
+#endif
 
 int main(int argc, char **argv) 
 { 
@@ -273,7 +316,8 @@ int main(int argc, char **argv)
    
        if(strcmp(command,"-d") == 0)
        #endif
-       startdaemon();
+       //startdaemon();
+       daemonize("aesd");
     }
     else
     {
