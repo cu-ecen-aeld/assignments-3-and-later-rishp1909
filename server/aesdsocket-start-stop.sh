@@ -7,7 +7,8 @@ case "$1" in
       ;;
    stop)
       echo "Stopping aesdsocket server" 
-      pkill aesdsocket
+      pid="$(pidof aesdsocket)"
+      kill -9 $pid
       ;;
      *)
       echo "Usage: aesdsocket-start-stop.sh {start|stop}"
