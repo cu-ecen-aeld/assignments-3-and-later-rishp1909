@@ -29,8 +29,17 @@ struct thread_data{
    int connfd;
 };
 
-pthread_t thread_pool[10];
+#define UNUSED(x) (void)(x)
+
+static void timeHandler(int sig, siginfo_t *si, void *uc);
+pid_t gettid(void);
+
+struct t_eventData{
+    int myData;
+};
+pthread_t thread_pool[100];
 int noOfThreads= 0;
+pthread_mutex_t mutex;
 
 void* threadfunc(void* thread_param)
 {
@@ -44,7 +53,7 @@ void* threadfunc(void* thread_param)
     for (;;) { 
              bzero(buff, MAX); 
 	     int err;
-	    while (1) {
+	     while (1) {
 	      int total_bytes_received = recv(connfd, buff, MAX, 0);
               int recIndex = 0;
 	      if (total_bytes_received < 0) 
@@ -61,6 +70,7 @@ void* threadfunc(void* thread_param)
                 char *line;
                 ssize_t rd;
                 size_t len;
+                
 		if ( rc != 0 ) {
 		  syslog(LOG_ERR,"Attempt to obtain mutex failed with %d\n",rc);
 		}
@@ -79,6 +89,7 @@ void* threadfunc(void* thread_param)
                 fread(recBuf, sizeof(char), recIndex, fp);
                 // Append Data
 	        fputs(buff,fp);
+	        fflush(fp);
 	        fclose(fp);
                 
                 // add received data to buffer
@@ -114,18 +125,20 @@ void signal_handler(int signal_number) {
     syslog(LOG_USER,"Caught signal, exiting");
     exit(0);
 }
-
+void setup10SecTimer();
 void startProcess()
 {
     int rc;
     int sockfd, connfd, len; 
-    struct sockaddr_in servaddr, cli;
+    struct sockaddr_in servaddr = {0};
+     struct sockaddr_in  cli = {0};
     char buffer[INET_ADDRSTRLEN];
     int fd;
     mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
     char *filename = "/var/tmp/aesdsocketdata";
     
     syslog(LOG_USER,"In startPRocess");
+    
     
     if (signal(SIGTERM, signal_handler) == SIG_ERR) {
         perror("signal");
@@ -135,6 +148,7 @@ void startProcess()
         perror("signal");
         exit(1);
     }
+
     ///var/tmp/aesdsocketdata
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, mode);
     close(fd);
@@ -162,13 +176,14 @@ void startProcess()
     else
         syslog(LOG_USER,"Socket successfully binded..\n"); 
         
-    pthread_mutex_t mutex;
+
     rc = pthread_mutex_init(&mutex, NULL);
     
     if ( rc != 0 ) {
           syslog(LOG_ERR,"Attempt to obtain mutex failed with %d\n",rc);
     }
     
+    setup10SecTimer();
  
     while(1)
     {
@@ -190,7 +205,7 @@ void startProcess()
 	    else
 	    {   
 		inet_ntop(AF_INET, &cli.sin_addr, buffer, sizeof(buffer));
-		syslog(LOG_USER,"Accepted connection from %s\n",buffer);
+		syslog(LOG_USER,"Accepted connection %d from %s\n",noOfThreads + 1,buffer);
 		
 		struct thread_data* tData = malloc(sizeof(struct thread_data));
 		tData->connfd = connfd;
@@ -252,20 +267,101 @@ void daemonize( char *cmd ){
                          fd0, fd1, fd2 );
                  exit( errno );
          }
+         //setup10SecTimer();
+
  }
+ 
+void expired(union sigval timer_data){
+   char outstr[200];
+   char buff[300];
+   time_t t;
+   struct tm *tmp;
+   int rc;
+   FILE *fp = NULL;
+   t = time(NULL);
+   tmp = localtime(&t);
+   if (tmp == NULL) {
+       perror("localtime");
+       exit(EXIT_FAILURE);
+   }
+
+   if (strftime(outstr, sizeof(outstr), "%a, %d %b %Y %T %z", tmp) == 0) {
+       syslog(LOG_ERR,"strftime returned 0");
+       exit(EXIT_FAILURE);
+   }
+   sprintf(buff,"timestamp:%s\n",outstr);
+
+   // Lock mutex to update /var/tmp/aesdsocketdata
+   rc = pthread_mutex_lock(&mutex);
+
+   // Open file 
+   fp = fopen("/var/tmp/aesdsocketdata","a+");
+   if(fp == NULL)
+   {
+      syslog(LOG_ERR," /var/tmp/aesdsocketdata file opening failed \n");
+   }
+
+   // Append Data
+   fputs(buff,fp);
+   fclose(fp);
+
+   rc = pthread_mutex_unlock(&mutex);
+   if ( rc != 0 ) {
+     printf("Unlock error\n");
+     syslog(LOG_ERR,"Attempt to unlock mutex failed with %d\n",rc);
+  }
+}
+
+void setup10SecTimer()
+{
+    int res = 0;
+    timer_t timerId = 0;
+
+    struct t_eventData eventData = { .myData = 0 };
+
+
+    /*  sigevent specifies behaviour on expiration  */
+    struct sigevent sev = { 0 };
+
+    /* specify start delay and interval
+     * it_value and it_interval must not be zero */
+
+    struct itimerspec its = {   .it_value.tv_sec  = 10,
+                                .it_value.tv_nsec = 0,
+                                .it_interval.tv_sec  = 10,
+                                .it_interval.tv_nsec = 0
+                            };
+
+    printf("Simple Threading Timer - thread-id: %d\n", gettid());
+
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_notify_function = &expired;
+    sev.sigev_value.sival_ptr = &eventData;
+
+
+    /* create timer */
+    res = timer_create(CLOCK_REALTIME, &sev, &timerId);
+
+
+    if (res != 0){
+        syslog(LOG_ERR, "Error timer_create: %s\n", strerror(errno));
+        exit(-1);
+    }
+
+    /* start timer */
+    res = timer_settime(timerId, 0, &its, NULL);
+
+    if (res != 0){
+        syslog(LOG_ERR, "Error timer_settime: %s\n", strerror(errno));
+        exit(-1);
+    }
+
+}
 
 int main(int argc, char **argv) 
 { 
     if(argc >= 2 )
     {
-       #if 0
-       char command[5] = {0};
-       int  csize = strlen(argv[1]);
-       strcpy(command,argv[1]);
-   
-       if(strcmp(command,"-d") == 0)
-       #endif
-       //startdaemon();
        daemonize("aesd");
     }
     else
@@ -282,6 +378,7 @@ int main(int argc, char **argv)
         openlog ("aeldsocket", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
     }
     syslog(LOG_USER,"Main thread started");
+
     startProcess();
 } 
 
